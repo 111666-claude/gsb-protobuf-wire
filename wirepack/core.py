@@ -2,6 +2,7 @@
 
 # 字段号与名字的内嵌表，随包一起走。
 SCHEMA = [(num, "f%03d" % num) for num in range(1, 201)]
+_SCHEMA_BY_NUM = dict(SCHEMA)
 
 
 class Counter:
@@ -12,24 +13,25 @@ class Counter:
 
 
 def field_name(num, counter):
-    for entry_num, name in SCHEMA:
-        counter.scanned += 1
-        if entry_num == num:
-            return name
-    return None
+    counter.scanned += 1
+    return _SCHEMA_BY_NUM.get(num)
 
 
-def read_key(data, off):
+def read_varint(data, off):
     shift = 0
-    key = 0
+    value = 0
     while off < len(data):
         byte = data[off]
         off += 1
-        key |= (byte & 0x7F) << shift
+        value |= (byte & 0x7F) << shift
         if byte < 0x80:
             break
         shift += 7
-    return key, off
+    return value, off
+
+
+def read_key(data, off):
+    return read_varint(data, off)
 
 
 def decode(data, counter):
@@ -41,26 +43,19 @@ def decode(data, counter):
         wire = key & 7
         name = field_name(num, counter)
         if wire == 0:
-            value = data[off]
-            off += 1
+            value, off = read_varint(data, off)
         elif wire == 2:
-            value = data[off + 1:].decode("utf-8", "replace")
-            off = len(data)
+            length, off = read_varint(data, off)
+            value = data[off:off + length].decode("utf-8", "replace")
+            off += length
         elif wire == 5:
             value = int.from_bytes(data[off:off + 4], "little")
             off += 4
         else:
             break
         if name is None:
-            continue
-        merged = False
-        for row in out:
-            if row["num"] == num:
-                row["value"] = value
-                merged = True
-                break
-        if not merged:
-            out.append({"num": num, "name": name, "wire": wire, "value": value})
+            name = str(num)
+        out.append({"num": num, "name": name, "wire": wire, "value": value})
     return out
 
 

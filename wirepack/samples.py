@@ -47,6 +47,6 @@ def run(name):
         data = b"".join(_key(i % 200 + 1, 0) + bytes([1]) for i in range(2000))
         counter = core.Counter()
         rows = core.decode(data, counter)
-        _line({"fields": 2000, "scanned": counter.scanned})
+        _line({"fields": 2000, "decoded": len(rows), "scanned": counter.scanned})
         return 0
     raise SystemExit("未知场景：" + name)
